@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # Serviço do MySQL
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345
+      MYSQL_DATABASE: desafio
+    ports:
+      - "3307:3306"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+  # Serviço do Maven para construir o projeto Java
+  app:
+    image: maven:latest
+    container_name: java_app
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: mvn clean install
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Serviço para rodar a aplicação Spring Boot
+  app-run:
+    image: openjdk:17-jdk
+    container_name: app_run
+    working_dir: /app
+    volumes:
+      - ./target:/app
+    command: ["java", "-jar", "escola-0.0.1-SNAPSHOT.jar"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/desafio?useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 12345
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQL8Dialect
+    ports:
+      - "8080:8080"
+    depends_on:
+      app:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  backend:
